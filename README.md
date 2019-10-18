@@ -20,4 +20,4 @@ That is not nice.
 ```
 
 ### Authors:
-#### Louise Brett, Dan Castillo, Michael Ton
+#### Louise Brett, Dan Castillo, Michael Ton.
