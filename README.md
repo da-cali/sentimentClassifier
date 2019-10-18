@@ -18,6 +18,7 @@ Tell me something...
 homework on friday
 That is not nice.
 ```
+[See the code here.](https://github.com/da-cali/sentimentClassifier/blob/master/src/Main.hs)
 
 ### Authors:
 #### Louise Brett, Dan Castillo, Michael Ton.
