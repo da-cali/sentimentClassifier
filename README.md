@@ -20,7 +20,7 @@ That is not nice.
 ```
 [See the code here.](https://github.com/da-cali/sentimentClassifier/blob/master/src/Main.hs)
 
-### Run it by either copying the source code and building it with vector, matrix, and random as dependencies; or by cloning this repository: 
+##### Run it by either copying the source code and building it with vector, matrix, and random as dependencies; or by cloning this repository: 
 
 0. Install [stack](https://docs.haskellstack.org/en/stable/README/) if necessary.
     
