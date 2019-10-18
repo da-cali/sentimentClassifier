@@ -109,17 +109,17 @@ predict phrase parameters vocabulary labels examplesPerLabel numOfExamples = let
   -- denominator). Using log probabilities to avoid underflow issues.
   probability :: Int -> Double
   probability label = sum (map log conditionals) + log labelProbability where
-    -- Index of label.
-    i :: Int
-    i = fromJust (elemIndex label labels)
     -- Probability p(y = l) that any phrase is tagged with label l.
     labelProbability :: Double
-    labelProbability = examplesPerLabel!!i / (fromIntegral $ numOfExamples)
+    labelProbability = examplesPerLabel!!fromJust (elemIndex label labels) 
+                     / fromIntegral numOfExamples
     -- Conditional probabilities p(x|y) that a y-labeled phrase has the word x.
     -- We speed up computations by mapping ¬p(x|y) to the matrix and then 
     -- only modify it at the indices of the words from the input phrase.
     conditionals :: [Double]
     conditionals = let
+      -- Index of label.
+      i = fromJust (elemIndex label labels)
       -- Indices of the words from the input phrase that are in our vocabulary.
       phraseIdxs = map (\ word -> fromJust $ elemIndex word vocabulary)
                        (filter (`elem` vocabulary) $ (nub.words.clean) phrase)
