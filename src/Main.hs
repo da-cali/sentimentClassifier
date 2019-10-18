@@ -3,9 +3,9 @@ module Main where
 import Data.Char
 import Data.List
 import Data.Maybe
+import Data.Matrix
 import Control.Monad
 import System.Random
-import Data.Matrix
 import qualified Data.Vector as V
 
 main :: IO ()
@@ -92,7 +92,7 @@ makeVocabulary lns = nub $ concatMap (\ (m,l) -> l ) lns
 -- examples with word "sad")
 fit :: Matrix Double -> [(Int,[String])] -> [String] -> [Int] -> Matrix Double
 fit parametersToTrain examples vocabulary labels = let
-  addCount (l,words) prams = foldr add1 prams words where 
+  addCount (l,sentence) prams = foldr add1 prams sentence where 
     add1 w ps = let i = 1 + fromJust (elemIndex l labels)
                     j = 1 + fromJust (elemIndex w vocabulary)
                 in setElem (getElem i j ps + 1) (i,j) ps
