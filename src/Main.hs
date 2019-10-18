@@ -32,14 +32,14 @@ main = do
       -- List of s random indices.
       randomIndices :: [Int]
       randomIndices = take sampleSize (randomRs (1,dataSize) generator)
-      -- Create test and train data sets with a 25-75 split.
+      -- Test and train data sets with a 25-75 split.
       test, train :: [(Int, [String])]
       test = map (\ i -> getElem 1 i allData) (take (sampleSize`div`4) randomIndices)
       train = map (\ i -> getElem 1 i allData) (drop (sampleSize`div`4) randomIndices)
       -- Set of all words from our training examples. 
       vocabulary :: [String]
       vocabulary = makeVocabulary train
-      -- Where 0 = Negative and 1 = Positive.
+      -- List of labels where 0 = Negative and 1 = Positive.
       labels :: [Int]
       labels = [0,1]
       -- List with the number of examples per label (matching labels).
@@ -54,11 +54,11 @@ main = do
       -- Predictions of our trained model on the test set.
       predictions :: [Int]
       predictions = map 
-        (\e-> predict e trainedParameters vocabulary labels tweetsPerLabel sampleSize)
+        (\ e -> predict e trainedParameters vocabulary labels tweetsPerLabel sampleSize)
         (map (\ (_,l) -> ' ' : unwords l) test)
       -- Percentage of incorrect predictions, 0 < error < 1.
       error :: Double
-      error = fromIntegral (length $ filter (\(p,(l,_))-> p /= l) (zip predictions test))
+      error = fromIntegral (length $ filter (\ (p,(l,_)) -> p /= l) (zip predictions test))
             / fromIntegral (length test)
   -- Showing error.
   if error > 1.0 
@@ -68,9 +68,9 @@ main = do
   -- Running main program.
   forever $ do
     putStrLn "Tell me something..."
-    phrase <- getLine
+    input <- getLine
     putStrLn $ (\ p -> if p==1 then "That is nice." else "That is not nice.")
-               (predict phrase trainedParameters vocabulary labels tweetsPerLabel sampleSize)
+               (predict input trainedParameters vocabulary labels tweetsPerLabel sampleSize)
 
 -- Separates semantically important characters and removes all other punctuation from text.
 clean :: String -> String
@@ -85,7 +85,7 @@ labeledWith text labels = zip labels (map (nub.words.clean) (lines $ map toLower
 
 -- Creates vocabulary (set of all words in lines).
 makeVocabulary :: [(Int,[String])] -> [String]
-makeVocabulary lns = nub $ concatMap (\ (m,l) -> l ) lns
+makeVocabulary lns = nub (concatMap (\ (m,l) -> l ) lns)
 
 -- "Trains" the model by returning a matrix where the (i,j) element is the 
 -- number of jth-labelled examples with ith word. (e.g. number of "Negative"
@@ -98,7 +98,7 @@ fit parametersToTrain examples vocabulary labels = let
                 in setElem (getElem i j ps + 1) (i,j) ps
   in foldr addCount parametersToTrain examples 
 
--- Given an input phrase and a trained model it predicts a label (e.g."Positive").
+-- Predicts a label (e.g."Positive") given an input phrase and a trained model.
 predict :: [Char] -> Matrix Double -> [String] -> [Int] -> [Double] -> Int -> Int
 predict phrase parameters vocabulary labels examplesPerLabel numOfExamples = let
   -- Returns the label corresponding to the index of the highest probability in list.
@@ -111,7 +111,7 @@ predict phrase parameters vocabulary labels examplesPerLabel numOfExamples = let
   probability label = sum (map log conditionals) + log labelProbability where
     -- Probability p(y = l) that any phrase is tagged with label l.
     labelProbability :: Double
-    labelProbability = examplesPerLabel!!fromJust (elemIndex label labels) 
+    labelProbability = examplesPerLabel !! fromJust (elemIndex label labels)
                      / fromIntegral numOfExamples
     -- Conditional probabilities p(x|y) that a y-labeled phrase has the word x.
     -- We speed up computations by mapping ¬p(x|y) to the matrix and then 
