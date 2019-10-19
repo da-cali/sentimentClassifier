@@ -88,10 +88,10 @@ makeVocabulary = nub . concatMap snd
 -- number of jth-labelled examples with ith word. (e.g. number of "Negative"
 -- examples with word "sad")
 fit :: [(Int,[String])] -> [String] -> [Int] -> Matrix Double
-fit examples vocabulary labels = foldr addCount smoothMatrix examples where
+fit examples vocabulary labels = foldr addCount allOnesMatrix examples where
   -- Laplace smoothing is done here by initializing a matrix with 1's.
-  smoothMatrix :: Matrix Double
-  smoothMatrix = matrix (length labels) (length vocabulary) $ \_-> 1
+  allOnesMatrix :: Matrix Double
+  allOnesMatrix = matrix (length labels) (length vocabulary) (\ _ -> 1)
   -- Traverses the sentence to update the matrix at every word.
   addCount :: (Int,[String]) -> Matrix Double -> Matrix Double
   addCount (label,sentence) parameters = let  
@@ -101,9 +101,9 @@ fit examples vocabulary labels = foldr addCount smoothMatrix examples where
     in foldr add1 parameters sentence
 
 -- Predicts a label (e.g."Positive") given an input phrase and a trained model.
-predict :: [Char] -> Matrix Double -> [String] -> [Int] -> [Double] -> Int -> Int
+predict :: String -> Matrix Double -> [String] -> [Int] -> [Double] -> Int -> Int
 predict phrase parameters vocabulary labels examplesPerLabel numOfExamples = let
-  -- Returns the label corresponding to the index of the highest probability in list.
+  -- Returns label corresponding to index with the highest probability in list.
   highestProbability :: [Double] -> Int
   highestProbability list = labels !! fromJust (elemIndex (maximum list) list)
   -- Computes the probability that the input phrase has the given label.
@@ -115,21 +115,20 @@ predict phrase parameters vocabulary labels examplesPerLabel numOfExamples = let
     labelProbability :: Double
     labelProbability = examplesPerLabel !! fromJust (elemIndex label labels)
                      / fromIntegral numOfExamples
-    -- Conditional probabilities p(x|y) that a y-labeled phrase has the word x.
-    -- We speed up computations by mapping ¬p(x|y) to the matrix and then 
-    -- only modify it at the indices of the words from the input phrase.
+    -- Vector of conditional probabilities p(x|y) that a y-labeled phrase has
+    -- the word x. We speed up computations by mapping ¬p(x|y) to the matrix 
+    -- and only modify it at the indices of the words from the input phrase.
     conditionals :: Matrix Double
     conditionals = let
       -- Index of label.
       i = fromJust (elemIndex label labels)
       -- Indices of the words from the input phrase that are in our vocabulary.
-      phraseIdxs = map (\ word -> fromJust $ elemIndex word vocabulary)
-                       (filter (`elem` vocabulary) $ (nub.words.clean) phrase)
+      wordIds = map (\ word -> (fromJust . elemIndex word) vocabulary)
+                    (filter (`elem` vocabulary) $ (nub.words.clean) phrase)
       -- Uses the count to compute the probability ¬p(x|y).
-      negProb _ count = 1 - (count/examplesPerLabel!!i)
+      neg count = 1 - (count/examplesPerLabel!!i)
       -- Reverses the probability to p(x|y) at every given index.
-      posProb [] ps = ps
-      posProb (j:js) ps = posProb js (setElem (1 - getElem (i+1) (j+1) ps) (i+1,j+1) ps)
-      in submatrix (i+1) (i+1) 1 (length vocabulary) 
-                   (posProb phraseIdxs $ mapRow negProb (i+1) parameters)
+      pos [] ps = ps
+      pos (j:js) ps = pos js (setElem (1 - getElem 1 (j+1) ps) (1,j+1) ps)
+      in pos wordIds (fmap neg $ submatrix (i+1) (i+1) 1 (length vocabulary) parameters)
   in highestProbability (map probability labels)
