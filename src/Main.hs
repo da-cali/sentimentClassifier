@@ -4,9 +4,8 @@ import Data.Char
 import Data.List
 import Data.Maybe
 import Data.Matrix
-import Control.Monad
 import System.Random
-import qualified Data.Vector as V
+import Control.Monad
 
 main :: IO ()
 main = do
@@ -43,20 +42,18 @@ main = do
       labels :: [Int]
       labels = [0,1]
       -- List with the number of examples per label (matching labels).
-      tweetsPerLabel :: [Double]
-      tweetsPerLabel = map count labels where
-        count l = foldr (\ (n,_) a -> a + if l == n then 1 else 0 ) 1 train
-      -- Matrix of learnt "parameters" (counts). Laplace smoothing is done
-      -- here by initializing the matrix with 1's before fitting.
+      examplesPerLabel :: [Double]
+      examplesPerLabel = map count labels where
+        count l = foldr (\ (n,_) a -> a + if l == n then 1 else 0) 1 train
+      -- Matrix of learnt "parameters" (counts).
       trainedParameters :: Matrix Double
-      trainedParameters = fit (matrix (length labels) (length vocabulary) $ \_-> 1)
-                              train vocabulary labels
+      trainedParameters = fit train vocabulary labels
       -- Predictions of our trained model on the test set.
       predictions :: [Int]
       predictions = map 
-        (\ e -> predict e trainedParameters vocabulary labels tweetsPerLabel sampleSize)
+        (\ e -> predict e trainedParameters vocabulary labels examplesPerLabel sampleSize)
         (map (\ (_,l) -> ' ' : unwords l) test)
-      -- Percentage of incorrect predictions, 0 < error < 1.
+      -- Percentage of incorrect predictions, where 0 < error < 1.
       error :: Double
       error = fromIntegral (length $ filter (\ (p,(l,_)) -> p /= l) (zip predictions test))
             / fromIntegral (length test)
@@ -69,34 +66,39 @@ main = do
   forever $ do
     putStrLn "Tell me something..."
     input <- getLine
-    putStrLn $ (\ p -> if p==1 then "That is nice." else "That is not nice.")
-               (predict input trainedParameters vocabulary labels tweetsPerLabel sampleSize)
+    putStrLn $ (\ p -> if p == 1 then "That is nice." else "That is not nice.")
+               (predict input trainedParameters vocabulary labels examplesPerLabel sampleSize)
 
 -- Separates semantically important characters and removes all other punctuation from text.
 clean :: String -> String
-clean text = filter (`notElem` ".,:;-+_='[]{}0123456789") (separate text) where
+clean text = filter (`notElem` "_'`()[]{}0123456789") (separate text) where
   separate [] = []
-  separate (h:t) | h `elem` "?!@#$%&" = h : ' ' : separate t
+  separate (h:t) | h `elem` ".,:;-+=*^?!@#$%&" = h : ' ' : separate t
                  | otherwise = h : separate t
 
 -- Process the file to create a list tuples of form (label,sentence).
 labeledWith :: String -> [Int] -> [(Int,[String])]
-labeledWith text labels = zip labels (map (nub.words.clean) (lines $ map toLower text))
+labeledWith text labels = zip labels (map (nub.words.clean) $ (lines . map toLower) text)
 
 -- Creates vocabulary (set of all words in lines).
 makeVocabulary :: [(Int,[String])] -> [String]
-makeVocabulary lns = nub (concatMap (\ (m,l) -> l ) lns)
+makeVocabulary = nub . concatMap snd
 
 -- "Trains" the model by returning a matrix where the (i,j) element is the 
 -- number of jth-labelled examples with ith word. (e.g. number of "Negative"
 -- examples with word "sad")
-fit :: Matrix Double -> [(Int,[String])] -> [String] -> [Int] -> Matrix Double
-fit parametersToTrain examples vocabulary labels = let
-  addCount (l,sentence) prams = foldr add1 prams sentence where 
-    add1 w ps = let i = 1 + fromJust (elemIndex l labels)
-                    j = 1 + fromJust (elemIndex w vocabulary)
-                in setElem (getElem i j ps + 1) (i,j) ps
-  in foldr addCount parametersToTrain examples 
+fit :: [(Int,[String])] -> [String] -> [Int] -> Matrix Double
+fit examples vocabulary labels = foldr addCount smoothMatrix examples where
+  -- Laplace smoothing is done here by initializing a matrix with 1's.
+  smoothMatrix :: Matrix Double
+  smoothMatrix = matrix (length labels) (length vocabulary) $ \_-> 1
+  -- Traverses the sentence to update the matrix at every word.
+  addCount :: (Int,[String]) -> Matrix Double -> Matrix Double
+  addCount (label,sentence) parameters = let  
+    add1 word params = setElem (getElem i j params + 1) (i,j) params where
+      i = 1 + fromJust (elemIndex label labels)
+      j = 1 + fromJust (elemIndex word vocabulary)
+    in foldr add1 parameters sentence
 
 -- Predicts a label (e.g."Positive") given an input phrase and a trained model.
 predict :: [Char] -> Matrix Double -> [String] -> [Int] -> [Double] -> Int -> Int
@@ -108,15 +110,15 @@ predict phrase parameters vocabulary labels examplesPerLabel numOfExamples = let
   -- (Not really conditional probabilities since we do not compute the 
   -- denominator). Using log probabilities to avoid underflow issues.
   probability :: Int -> Double
-  probability label = sum (map log conditionals) + log labelProbability where
-    -- Probability p(y = l) that any phrase is tagged with label l.
+  probability label = sum (fmap log conditionals) + log labelProbability where
+    -- Probability p(y=l) that any phrase is tagged with label l.
     labelProbability :: Double
     labelProbability = examplesPerLabel !! fromJust (elemIndex label labels)
                      / fromIntegral numOfExamples
     -- Conditional probabilities p(x|y) that a y-labeled phrase has the word x.
     -- We speed up computations by mapping ¬p(x|y) to the matrix and then 
     -- only modify it at the indices of the words from the input phrase.
-    conditionals :: [Double]
+    conditionals :: Matrix Double
     conditionals = let
       -- Index of label.
       i = fromJust (elemIndex label labels)
@@ -128,5 +130,6 @@ predict phrase parameters vocabulary labels examplesPerLabel numOfExamples = let
       -- Reverses the probability to p(x|y) at every given index.
       posProb [] ps = ps
       posProb (j:js) ps = posProb js (setElem (1 - getElem (i+1) (j+1) ps) (i+1,j+1) ps)
-      in V.toList $ getRow (i+1) (posProb phraseIdxs $ mapRow negProb (i+1) parameters)
+      in submatrix (i+1) (i+1) 1 (length vocabulary) 
+                   (posProb phraseIdxs $ mapRow negProb (i+1) parameters)
   in highestProbability (map probability labels)
