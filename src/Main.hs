@@ -16,25 +16,19 @@ main = do
   meanTweets <- readFile "src/meanTweets.txt"
   -- Getting global random number generator to randomize data set.
   generator <- getStdGen
-  let -- List of processed lines.
-      allExamples :: [(Int,[String])]
-      allExamples = niceTweets`labeledWith`[1,1..] ++ meanTweets`labeledWith`[0,0..]
-      -- Number of lines extracted from files.
-      dataSize :: Int
-      dataSize = length allExamples
-      -- Matrix with our data (a row vector actually, but the type is Matrix).
-      allData :: Matrix (Int, [String])
-      allData = fromList 1 dataSize allExamples
+  let -- Matrix with processed lines (a row vector, but the type is Matrix).
+      allExamples :: Matrix (Int,[String])
+      allExamples = (niceTweets`labeledWith`1) <|> (meanTweets`labeledWith`0)
       -- Number of examples to train and test the model on.
       sampleSize :: Int
       sampleSize = 1000
-      -- List of s random indices.
+      -- List of sampleSize random indices.
       randomIndices :: [Int]
-      randomIndices = take sampleSize (randomRs (1,dataSize) generator)
+      randomIndices = take sampleSize (randomRs (1,ncols allExamples) generator)
       -- Test and train data sets with a 25-75 split.
       test, train :: [(Int, [String])]
-      test = map (\ i -> getElem 1 i allData) (take (sampleSize`div`4) randomIndices)
-      train = map (\ i -> getElem 1 i allData) (drop (sampleSize`div`4) randomIndices)
+      test = map (\ j -> allExamples!(1,j)) (take (sampleSize`div`4) randomIndices)
+      train = map (\ j -> allExamples!(1,j)) (drop (sampleSize`div`4) randomIndices)
       -- Set of all words from our training examples. 
       vocabulary :: [String]
       vocabulary = makeVocabulary train
@@ -59,9 +53,9 @@ main = do
             / fromIntegral (length test)
   -- Showing error.
   if error > 1.0 
-    then putStrLn "Something went wrong."
-    else do putStrLn "Training complete. Error: "
-            print error
+     then putStrLn "Something went wrong."
+     else do putStrLn "Training complete. Error: "
+             print error
   -- Running main program.
   forever $ do
     putStrLn "Tell me something..."
@@ -76,9 +70,11 @@ clean text = filter (`notElem` "_'`()[]{}0123456789") (separate text) where
   separate (h:t) | h `elem` ".,:;-+=*^?!@#$%&" = h : ' ' : separate t
                  | otherwise = h : separate t
 
--- Process the file to create a list tuples of form (label,sentence).
-labeledWith :: String -> [Int] -> [(Int,[String])]
-labeledWith text labels = zip labels (map (nub.words.clean) $ (lines . map toLower) text)
+-- Processes the file to create a vector of tuples of form (label,sentence).
+labeledWith :: String -> Int -> Matrix (Int,[String])
+labeledWith text label = fromList 1 size (text`labeled`label) where
+  labeled t l = zip [l,l..] [(nub.words.clean) l | l <- lines (map toLower t)]
+  size = length (text`labeled`label)
 
 -- Creates vocabulary (set of all words in lines).
 makeVocabulary :: [(Int,[String])] -> [String]
@@ -124,7 +120,7 @@ predict phrase parameters vocabulary labels examplesPerLabel numOfExamples = let
       i = fromJust (elemIndex label labels)
       -- Indices of the words from the input phrase that are in our vocabulary.
       wordIds = map (\ word -> (fromJust . elemIndex word) vocabulary)
-                    (filter (`elem` vocabulary) $ (nub.words.clean) phrase)
+                    [w | w <- (nub.words.clean) phrase, w `elem` vocabulary]
       -- Uses the count to compute the probability ¬p(x|y).
       neg count = 1 - (count/examplesPerLabel!!i)
       -- Reverses the probability to p(x|y) at every given index.
