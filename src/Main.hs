@@ -16,19 +16,19 @@ main = do
   meanTweets <- readFile "src/meanTweets.txt"
   -- Getting global random number generator to randomize data set.
   generator <- getStdGen
-  let -- Matrix with processed lines (a row vector, but the type is Matrix).
+  let -- Matrix with processed lines (a column vector, but the type is Matrix).
       allExamples :: Matrix (Int,[String])
-      allExamples = (niceTweets`labeledWith`1) <|> (meanTweets`labeledWith`0)
+      allExamples = (niceTweets`labeledWith`1) <-> (meanTweets`labeledWith`0)
       -- Number of examples to train and test the model on.
       sampleSize :: Int
       sampleSize = 1000
       -- List of sampleSize random indices.
       randomIndices :: [Int]
-      randomIndices = take sampleSize (randomRs (1,ncols allExamples) generator)
+      randomIndices = take sampleSize (randomRs (1,nrows allExamples) generator)
       -- Test and train data sets with a 25-75 split.
       test, train :: [(Int, [String])]
-      test = map (\ j -> allExamples!(1,j)) (take (sampleSize`div`4) randomIndices)
-      train = map (\ j -> allExamples!(1,j)) (drop (sampleSize`div`4) randomIndices)
+      test = map (\ i -> allExamples!(i,1)) (take (sampleSize`div`4) randomIndices)
+      train = map (\ i -> allExamples!(i,1)) (drop (sampleSize`div`4) randomIndices)
       -- Set of all words from our training examples. 
       vocabulary :: [String]
       vocabulary = makeVocabulary train
@@ -44,9 +44,8 @@ main = do
       trainedParameters = fit train vocabulary labels
       -- Predictions of our trained model on the test set.
       predictions :: [Int]
-      predictions = map 
-        (\ e -> predict e trainedParameters vocabulary labels examplesPerLabel sampleSize)
-        (map (\ (_,l) -> ' ' : unwords l) test)
+      predictions = map (\ e -> predict e trainedParameters vocabulary examplesPerLabel)
+                        (map (\ (_,line) -> unwords line) test)
       -- Percentage of incorrect predictions, where 0 < error < 1.
       error :: Double
       error = fromIntegral (length $ filter (\ (p,(l,_)) -> p /= l) (zip predictions test))
@@ -61,19 +60,20 @@ main = do
     putStrLn "Tell me something..."
     input <- getLine
     putStrLn $ (\ p -> if p == 1 then "That is nice." else "That is not nice.")
-               (predict input trainedParameters vocabulary labels examplesPerLabel sampleSize)
+               (predict input trainedParameters vocabulary examplesPerLabel)
 
--- Separates semantically important characters and removes all other punctuation from text.
-clean :: String -> String
-clean text = filter (`notElem` "_'`()[]{}0123456789") (separate text) where
-  separate [] = []
-  separate (h:t) | h `elem` ".,:;-+=*^?!@#$%&" = h : ' ' : separate t
-                 | otherwise = h : separate t
+-- Separates semantically important characters (so they are treated as words) 
+-- and removes other punctuation from text to return a set of its words.
+clean :: String -> [String]
+clean text = nub.words $ filter (`notElem` ".,:;_'`()[]{}0123456789") (separate text)
+  where separate [] = []
+        separate (h:t) | h `elem` "?!@#$%&^*=+-" = h : ' ' : separate t
+                       | otherwise = h : separate t
 
 -- Processes the file to create a vector of tuples of form (label,sentence).
 labeledWith :: String -> Int -> Matrix (Int,[String])
-labeledWith text label = fromList 1 size (text`labeled`label) where
-  labeled t l = zip [l,l..] [(nub.words.clean) l | l <- lines (map toLower t)]
+labeledWith text label = fromList size 1 (text`labeled`label) where
+  labeled t l = zip [l,l..] [clean line | line <- lines (map toLower t)]
   size = length (text`labeled`label)
 
 -- Creates vocabulary (set of all words in lines).
@@ -92,16 +92,16 @@ fit examples vocabulary labels = foldr addCount allOnesMatrix examples where
   addCount :: (Int,[String]) -> Matrix Double -> Matrix Double
   addCount (label,sentence) parameters = let  
     add1 word params = setElem (getElem i j params + 1) (i,j) params where
-      i = 1 + fromJust (elemIndex label labels)
+      i = 1 + label
       j = 1 + fromJust (elemIndex word vocabulary)
     in foldr add1 parameters sentence
 
 -- Predicts a label (e.g."Positive") given an input phrase and a trained model.
-predict :: String -> Matrix Double -> [String] -> [Int] -> [Double] -> Int -> Int
-predict phrase parameters vocabulary labels examplesPerLabel numOfExamples = let
+predict :: String -> Matrix Double -> [String] -> [Double] -> Int
+predict phrase parameters vocabulary examplesPerLabel = let
   -- Returns label corresponding to index with the highest probability in list.
   highestProbability :: [Double] -> Int
-  highestProbability list = labels !! fromJust (elemIndex (maximum list) list)
+  highestProbability list = fromJust (elemIndex (maximum list) list)
   -- Computes the probability that the input phrase has the given label.
   -- (Not really conditional probabilities since we do not compute the 
   -- denominator). Using log probabilities to avoid underflow issues.
@@ -109,22 +109,19 @@ predict phrase parameters vocabulary labels examplesPerLabel numOfExamples = let
   probability label = sum (fmap log conditionals) + log labelProbability where
     -- Probability p(y=l) that any phrase is tagged with label l.
     labelProbability :: Double
-    labelProbability = examplesPerLabel !! fromJust (elemIndex label labels)
-                     / fromIntegral numOfExamples
+    labelProbability = examplesPerLabel!!label / sum examplesPerLabel
     -- Vector of conditional probabilities p(x|y) that a y-labeled phrase has
-    -- the word x. We speed up computations by mapping ¬p(x|y) to the matrix 
+    -- the word x. We speed up computations by mapping ¬p(x|y) to the y row 
     -- and only modify it at the indices of the words from the input phrase.
     conditionals :: Matrix Double
-    conditionals = let
-      -- Index of label.
-      i = fromJust (elemIndex label labels)
-      -- Indices of the words from the input phrase that are in our vocabulary.
-      wordIds = map (\ word -> (fromJust . elemIndex word) vocabulary)
-                    [w | w <- (nub.words.clean) phrase, w `elem` vocabulary]
+    conditionals = negProbs `positiveAt` wordIndices where
       -- Uses the count to compute the probability ¬p(x|y).
-      neg count = 1 - (count/examplesPerLabel!!i)
+      negProbs = fmap (\ count -> 1 - (count/examplesPerLabel!!label))
+                      (submatrix (label+1) (label+1) 1 (length vocabulary) parameters)
       -- Reverses the probability to p(x|y) at every given index.
-      pos [] ps = ps
-      pos (j:js) ps = pos js (setElem (1 - getElem 1 (j+1) ps) (1,j+1) ps)
-      in pos wordIds (fmap neg $ submatrix (i+1) (i+1) 1 (length vocabulary) parameters)
-  in highestProbability (map probability labels)
+      positiveAt ps [] = ps
+      positiveAt ps (j:js) = positiveAt (setElem (1 - getElem 1 (j+1) ps) (1,j+1) ps) js
+      -- Indices of the words from the input phrase that are in our vocabulary.
+      wordIndices = map (\ word -> (fromJust . elemIndex word) vocabulary)
+                        [word | word <- clean phrase, word `elem` vocabulary]
+  in highestProbability $ map probability (take (nrows parameters) [0..])
