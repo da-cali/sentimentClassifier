@@ -31,24 +31,21 @@ main = do
       train = [allExamples!(i,1) | i <- drop (sampleSize`div`4) randomIndices]
       -- Set of all words from our training examples. 
       vocabulary :: [String]
-      vocabulary = (nub . concatMap snd) train
-      -- List of labels where 0 = Negative and 1 = Positive.
-      labels :: [Int]
-      labels = [0,1]
-      -- List with the number of examples per label (matching labels).
+      vocabulary = nub (concatMap snd train)
+      -- List with the number of training examples per label (matching labels).
       examplesPerLabel :: [Double]
-      examplesPerLabel = map count labels where
+      examplesPerLabel = map count [0,1] where
         count l = foldr (\ (n,_) a -> a + if l == n then 1 else 0) 1 train
       -- Matrix of learnt "parameters" (counts).
       trainedParameters :: Matrix Double
-      trainedParameters = fit train vocabulary labels
+      trainedParameters = fit train vocabulary examplesPerLabel
       -- Predictions of our trained model on the test set.
       predictions :: [Int]
       predictions = map (\ e -> predict e trainedParameters vocabulary examplesPerLabel)
-                        (map (\ (_,line) -> unwords line) test)
+                        [unwords example | example <- map snd test]
       -- Percentage of incorrect predictions, where 0 < error < 1.
       error :: Double
-      error = fromIntegral (length $ filter (\ (p,(l,_)) -> p /= l) (zip predictions test))
+      error = fromIntegral (length [(p,l) | (p,l) <- zip predictions (map fst test), p /= l])
             / fromIntegral (length test)
   -- Showing error.
   if error > 1.0 
@@ -79,7 +76,7 @@ labeledWith text label = fromList size 1 (text`labeled`label) where
 -- "Trains" the model by returning a matrix where the (i,j) element is the 
 -- number of jth-labelled examples with ith word. (e.g. number of "Negative"
 -- examples with word "sad")
-fit :: [(Int,[String])] -> [String] -> [Int] -> Matrix Double
+fit :: [(Int,[String])] -> [String] -> [Double] -> Matrix Double
 fit examples vocabulary labels = foldr addCount allOnesMatrix examples where
   -- Laplace smoothing is done here by initializing a matrix with 1's.
   allOnesMatrix :: Matrix Double
@@ -120,4 +117,4 @@ predict phrase parameters vocabulary examplesPerLabel = let
       -- Indices of the words from the input phrase that are in our vocabulary.
       wordIndices = map (\ word -> (fromJust . elemIndex word) vocabulary)
                         [word | word <- clean phrase, word `elem` vocabulary]
-  in highestProbability $ map probability (take (nrows parameters) [0..])
+  in highestProbability (map probability [0 .. nrows parameters - 1])
