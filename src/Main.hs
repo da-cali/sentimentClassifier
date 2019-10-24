@@ -27,11 +27,11 @@ main = do
       randomIndices = take sampleSize (randomRs (1,nrows allExamples) generator)
       -- Test and train data sets with a 25-75 split.
       test, train :: [(Int, [String])]
-      test = map (\ i -> allExamples!(i,1)) (take (sampleSize`div`4) randomIndices)
-      train = map (\ i -> allExamples!(i,1)) (drop (sampleSize`div`4) randomIndices)
+      test = [allExamples!(i,1) | i <- take (sampleSize`div`4) randomIndices]
+      train = [allExamples!(i,1) | i <- drop (sampleSize`div`4) randomIndices]
       -- Set of all words from our training examples. 
       vocabulary :: [String]
-      vocabulary = makeVocabulary train
+      vocabulary = (nub . concatMap snd) train
       -- List of labels where 0 = Negative and 1 = Positive.
       labels :: [Int]
       labels = [0,1]
@@ -67,18 +67,14 @@ main = do
 clean :: String -> [String]
 clean text = nub.words $ filter (`notElem` ".,:;_'`()[]{}0123456789") (separate text)
   where separate [] = []
-        separate (h:t) | h `elem` "?!@#$%&^*=+-" = h : ' ' : separate t
-                       | otherwise = h : separate t
+        separate (h:t) | h `elem` "?!@#$%&^*=+-" = ' ' : h : ' ' : separate t
+                       | otherwise = toLower h : separate t
 
 -- Processes the file to create a vector of tuples of form (label,sentence).
 labeledWith :: String -> Int -> Matrix (Int,[String])
 labeledWith text label = fromList size 1 (text`labeled`label) where
-  labeled t l = zip [l,l..] [clean line | line <- lines (map toLower t)]
+  labeled t l = zip [l,l..] [clean line | line <- lines t]
   size = length (text`labeled`label)
-
--- Creates vocabulary (set of all words in lines).
-makeVocabulary :: [(Int,[String])] -> [String]
-makeVocabulary = nub . concatMap snd
 
 -- "Trains" the model by returning a matrix where the (i,j) element is the 
 -- number of jth-labelled examples with ith word. (e.g. number of "Negative"
