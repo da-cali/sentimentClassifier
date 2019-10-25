@@ -62,10 +62,12 @@ main = do
 -- Separates semantically important characters (so they are treated as words) 
 -- and removes other punctuation from text to return a set of its words.
 clean :: String -> [String]
-clean text = nub.words $ filter (`notElem` ".,:;_'`()[]{}0123456789") (separate text)
-  where separate [] = []
-        separate (h:t) | h `elem` "?!@#$%&^*=+-" = ' ' : h : ' ' : separate t
-                       | otherwise = toLower h : separate t
+clean text = (nub.words.filterpunc) text where
+  filterpunc [] = []
+  filterpunc (h:t) = let processed c | c `elem` "?!@#$%&^*=+-" = ' ' : c : " "
+                                     | c `elem` ".,:;_'`()[]{}0123456789" = []
+                                     | otherwise = toLower c : []
+                     in processed h ++ filterpunc t
 
 -- Processes the file to create a vector of tuples of form (label,sentence).
 labeledWith :: String -> Int -> Matrix (Int,[String])
