@@ -64,6 +64,7 @@ main = do
 -- and removes other punctuation from text to return a set of its words.
 clean :: String -> [String]
 clean text = (nub.words.filterpunc) text where
+  filterpunc :: String -> String
   filterpunc [] = []
   filterpunc (h:t) = let processed c | c `elem` "?!@#$%&^*=+-" = ' ' : c : " "
                                      | c `elem` ".,:;_'`()[]{}0123456789" = []
@@ -73,6 +74,7 @@ clean text = (nub.words.filterpunc) text where
 -- Processes the file to create a vector of tuples of form (label,sentence).
 labeledWith :: String -> Int -> Matrix (Int,[String])
 labeledWith text label = fromList (length labeledText) 1 labeledText where
+  labeledText :: [(Int,[String])]
   labeledText = zip [label,label..] [clean line | line <- lines text]
 
 -- "Trains" the model by returning a matrix where the (i,j) element is the 
@@ -85,7 +87,8 @@ fit examples vocabulary labels = foldr addCount allOnesMatrix examples where
   allOnesMatrix = matrix (length labels) (length vocabulary) (\ _ -> 1)
   -- Traverses the sentence to update the matrix at every word.
   addCount :: (Int,[String]) -> Matrix Double -> Matrix Double
-  addCount (label,sentence) parameters = let  
+  addCount (label,sentence) parameters = let
+    add1 :: String -> Matrix Double -> Matrix Double
     add1 word params = setElem (getElem i j params + 1) (i,j) params where
       i = 1 + label
       j = 1 + fromJust (elemIndex word vocabulary)
@@ -111,12 +114,15 @@ predict phrase parameters vocabulary examplesPerLabel = let
     conditionals :: Matrix Double
     conditionals = negProbs `positiveAt` wordIndices where
       -- Uses the count to compute the probability ¬p(x|y).
+      negProbs :: Matrix Double
       negProbs = fmap (\ count -> 1 - (count/examplesPerLabel!!label))
                       (submatrix (label+1) (label+1) 1 (length vocabulary) parameters)
       -- Reverses the probability to p(x|y) at every given index.
+      positiveAt :: Matrix Double -> [Int] -> Matrix Double
       positiveAt ps [] = ps
       positiveAt ps (j:js) = positiveAt (setElem (1 - getElem 1 (j+1) ps) (1,j+1) ps) js
       -- Indices of the words from the input phrase that are in our vocabulary.
+      wordIndices :: [Int]
       wordIndices = map (\ word -> (fromJust . elemIndex word) vocabulary)
                         [word | word <- clean phrase, word `elem` vocabulary]
   in highestProbability (map probability [0 .. nrows parameters - 1])
