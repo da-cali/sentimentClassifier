@@ -56,8 +56,9 @@ main = do
   forever $ do
     putStrLn "Tell me something..."
     input <- getLine
-    putStrLn $ (\ p -> if p == 1 then "That is nice." else "That is not nice.")
-               (predict input trainedParameters vocabulary examplesPerLabel)
+    putStrLn $ if predict input trainedParameters vocabulary examplesPerLabel == 1
+                  then "That is nice." 
+                  else "That is not nice."
 
 -- Separates semantically important characters (so they are treated as words) 
 -- and removes other punctuation from text to return a set of its words.
@@ -71,9 +72,8 @@ clean text = (nub.words.filterpunc) text where
 
 -- Processes the file to create a vector of tuples of form (label,sentence).
 labeledWith :: String -> Int -> Matrix (Int,[String])
-labeledWith text label = fromList size 1 (text`labeled`label) where
-  labeled t l = zip [l,l..] [clean line | line <- lines t]
-  size = length (text`labeled`label)
+labeledWith text label = fromList (length labeledText) 1 labeledText where
+  labeledText = zip [label,label..] [clean line | line <- lines text]
 
 -- "Trains" the model by returning a matrix where the (i,j) element is the 
 -- number of jth-labelled examples with ith word. (e.g. number of "Negative"
