@@ -1,6 +1,6 @@
 # sentimentClassifier
 
-A vanilla Naive Bayes classifier that tells you whether or not you are saying something nice.
+A vanilla Naive Bayes classifier trained with tweets that tells you whether or not you are saying something nice.
 
 Like this:
 
@@ -8,16 +8,23 @@ Like this:
 Tell me something...
 love
 That is nice.
+```
+```bash
 Tell me something...
 hate
 That is not nice.
+```
+```bash
 Tell me something...
 homework
 That is nice.
+```
+```bash
 Tell me something...
 homework on friday
 That is not nice.
 ```
+
 [See the code here.](https://github.com/da-cali/sentimentClassifier/blob/master/src/Main.hs)
 
 Run it by either copying the source code and building it with matrix and random as dependencies; or by cloning this repository: 
@@ -36,14 +43,12 @@ Run it by either copying the source code and building it with matrix and random 
     ```
     stack build
     ```
-4. Run GHCi:
+4. Train and run:
     ```
-    stack ghci
+    stack runhaskell src/Main.hs
     ```
-5. Train and run:
-    ```
-    main
-    ```
+
+##### Note: Increase the sample size to train with more examples and get more accurate responses.
 
 ### Authors:
 #### Louise Brett, Dan Castillo, Michael Ton.

@@ -11,7 +11,7 @@ main :: IO ()
 main = do
   -- Training a Naive Bayes classifier.
   putStrLn "Training model..."
-  -- Reading files with tweets. Data from Sentiment140.com.
+  -- Reading text files with tweets. Data from Sentiment140.com.
   niceTweets <- readFile "src/niceTweets.txt"
   meanTweets <- readFile "src/meanTweets.txt"
   -- Getting global random number generator to randomize data set.
@@ -36,7 +36,7 @@ main = do
       examplesPerLabel :: [Double]
       examplesPerLabel = map count [0,1] where
         count l = foldr (\ (n,_) a -> a + if l == n then 1 else 0) 1 train
-      -- Matrix of learnt "parameters" (counts).
+      -- Matrix of learnt parameters (counts).
       trainedParameters :: Matrix Double
       trainedParameters = fit train vocabulary examplesPerLabel
       -- Predictions of our trained model on the test set.
@@ -77,7 +77,7 @@ labeledWith text label = fromList (length labeledText) 1 labeledText where
   labeledText :: [(Int,[String])]
   labeledText = zip [label,label..] [clean line | line <- lines text]
 
--- "Trains" the model by returning a matrix where the (i,j) element is the 
+-- Trains the classifier by returning a matrix where the (i,j) element is the 
 -- number of jth-labelled examples with ith word. (e.g. number of "Negative"
 -- examples with word "sad")
 fit :: [(Int,[String])] -> [String] -> [Double] -> Matrix Double
